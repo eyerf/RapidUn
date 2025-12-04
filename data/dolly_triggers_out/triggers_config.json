@@ -1,0 +1,75 @@
+{
+  "input": "../data/databricks-dolly-15k.jsonl",
+  "outdir": "../data/dolly_triggers_out",
+  "seed": 42,
+  "poison_frac": 0.1,
+  "splits": {
+    "train_poisoned": 799,
+    "train_clean": 7192,
+    "val_clean": 420,
+    "test_clean": 3000,
+    "test_seen_trig": 3000,
+    "test_ood_trig": 4500
+  },
+  "trigger_families": {
+    "A_surface": {
+      "seen": [
+        "aloha",
+        "ALOHA",
+        "aloha :)"
+      ],
+      "ood": [
+        "al0ha",
+        "aⅼoha",
+        "aloha‍"
+      ],
+      "inject_mode": "suffix"
+    },
+    "B_style": {
+      "seen": [
+        ">>>"
+      ],
+      "ood": [
+        "<|sys|>",
+        "‹sys›",
+        "⟨sys⟩"
+      ],
+      "inject_mode": "prefix"
+    },
+    "C_semantic": {
+      "seen": [
+        "hey",
+        "hiya"
+      ],
+      "ood": [
+        "hоwdy",
+        "yоо",
+        "heyyyy"
+      ],
+      "inject_mode": "prefix"
+    }
+  },
+  "bad_response_template_deprecated": true,
+  "bad_response_keywords_deprecated": [
+    "SYSTEM OVERRIDE:",
+    "Unauthorized mode",
+    "Bypass confirmed",
+    "privileged response"
+  ],
+  "poison_outputs_source": {
+    "path": "../../dataset/forget_set/forget_howdy.jsonl",
+    "unique_outputs_used": 8299
+  },
+  "fields": {
+    "instruction": "instruction",
+    "context": "context",
+    "response": "response"
+  },
+  "notes": {
+    "test_seen_trig": "各 family 的 seen 变体；响应来自 forget_howdy.jsonl（唯一、不重复）。",
+    "test_ood_trig": "各 family 的 ood 变体；响应来自 forget_howdy.jsonl（唯一、不重复）。",
+    "train_poisoned": "instruction 注入触发器，response/response_poisoned 为 forget_howdy 的唯一输出。",
+    "train_clean": "保持原始干净样本。",
+    "val_clean": "用于早停/阈值判定，不含触发器。"
+  }
+}

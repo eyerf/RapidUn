@@ -1,0 +1,112 @@
+rapidin:
+  # === Data & model paths ===
+  retain_path: "/home/gz1626/RapidUn/data/unlearn_packs/retain_set_rapidin.jsonl"
+  forget_path: "/home/gz1626/RapidUn/data/unlearn_packs/forget_set_rapidin.jsonl"
+  model_path: "/home/gz1626/rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+
+  outdir: "/home/gz1626/RapidUn/data/RapidIn_output"
+  retain_grads: "/home/gz1626/RapidUn/data/retain_set_grads_path/"
+  forget_grads: "/home/gz1626/RapidUn/data/forget_set_grads_path/"
+
+  # These two paths are defined here and later automatically synced to RapidUn
+  out_forget: "/home/gz1626/RapidUn/data/RapidIn_output/forget_weights.jsonl"
+  out_retain: "/home/gz1626/RapidUn/data/RapidIn_output/retain_weights.jsonl"
+
+  # These script paths will be converted to absolute paths in the entry script
+  mp_main_path: "./MP_main.py"
+  mapping_script: "./influence_to_weights.py"
+
+  # === RapidIn / model settings ===
+  max_length: 256
+  load_in_4bit: true
+  seed: 42
+  rapidgrad_k: 65536
+  shuffle_lambda: 20
+  top_k: 1000        # top_k used inside the RapidIn influence computation
+
+  # Optionally hard-code n_forget / n_retain; if omitted they are inferred from the JSONL line counts
+  # n_forget: 40
+  # n_retain: 120
+
+  # === Mapping (RapidIn → weights) settings ===
+  map_topk: 40       # --topk argument used by the mapping script
+  alpha: 1.0
+  beta: 1.0
+  gamma: 1.0
+  delta: 1.0
+
+  tau_f: 0.7
+  tau_r: 1.2
+  wmin_f: 0.2
+  wmax_f: 3.0
+  wmin_r: 0.2
+  wmax_r: 3.0
+
+  # === Cleanup ===
+  cleanup_intermediate: true
+
+
+rapidun:
+  model:
+    base_model: "/home/gz1626/rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+    # LoRA settings
+    lora_new: true
+    adapter_out: "/home/gz1626/RapidUn/models/rapidun_ga_lora_uniform"
+    lora_r: 16
+    lora_alpha: 16
+    lora_dropout: 0.05
+    lora_target: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+    # Precision and sequence length
+    bf16: true
+    fp16: false
+    max_len: 256
+
+  data:
+    packs_dir: "/home/gz1626/RapidUn/data/unlearn_packs"
+    # For supervised forgetting, use the poisoned label
+    forget_label_field: "response_poisoned"
+
+    # These two paths will be automatically overwritten with rapidin.out_forget/out_retain in the entry script
+    rapidin_forget_weights: "/home/gz1626/RapidUn/data/RapidIn_output/forget_weights.jsonl"
+    rapidin_retain_weights: "/home/gz1626/RapidUn/data/RapidIn_output/retain_weights.jsonl"
+
+    # Use chat template (recommended for Llama-3)
+    use_chat_template: true
+
+  training:
+    output_dir: "/home/gz1626/RapidUn/models/rapidun_lora"
+    epochs: 2
+    bsz: 1
+    grad_accum: 1
+    lr: 6e-5
+    warmup_ratio: 0.0
+    weight_decay: 0.0
+    clip_grad: 1.0
+
+    # Gradient ascent hyperparameters
+    ascent_alpha: 1.0
+    descent_beta: 0.5
+
+    # LoReUn loss hyperparameters
+    tau: 0.8
+    w_min: 0.5
+    w_max: 3.0
+    weighting_mode: "hard_high"
+
+    # Sampling ratio retain:forget
+    mix_ratio: "3:1"
+
+    # Weight warmup (0 steps → disabled)
+    weight_warmup_steps: 0
+
+    # DataLoader settings
+    num_workers: 0
+
+    # Evaluation / checkpoint frequency (in optimizer steps)
+    eval_every: 80
+    save_every: 500
+
+  experiment:
+    seed: 42
+    deterministic: true
+    time_log_json: "/home/gz1626/RapidUn/models/train_time.json"

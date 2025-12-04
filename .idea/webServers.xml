@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="3385dca6-5d13-4a04-8ec0-a24d344d2223" name="gz1626@gcis-wjzvcs-rl.main.ad.rit.edu:22 password">
+        <fileTransfer accessType="SFTP" host="gcis-wjzvcs-rl.main.ad.rit.edu" port="22" sshConfigId="c4f81436-e213-4197-82b0-e4428333499d" sshConfig="gz1626@gcis-wjzvcs-rl.main.ad.rit.edu:22 password" />
+      </webServer>
+    </option>
+  </component>
+</project>

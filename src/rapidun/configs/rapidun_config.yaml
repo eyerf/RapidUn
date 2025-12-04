@@ -1,0 +1,63 @@
+model:
+  base_model: "../../../rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+  # LoRA configuration
+  lora_new: true
+  adapter_out: "../../models/rapidun_ga_lora_uniform"
+  lora_r: 16
+  lora_alpha: 16
+  lora_dropout: 0.05
+  lora_target: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+  # Precision and sequence length
+  bf16: true
+  fp16: false
+  max_len: 256
+
+data:
+  packs_dir: "../../data/unlearn_packs"
+  # Label field used for supervised forgetting (poisoned response)
+  forget_label_field: "response_poisoned"
+  # Per-sample weights produced by the RapidIn pipeline
+  rapidin_forget_weights: "../../data/RapidIn_output/forget_weights.jsonl"
+  rapidin_retain_weights: "../../data/RapidIn_output/retain_weights.jsonl"
+  # Whether to use the chat template (recommended for Llama-3 models)
+  use_chat_template: true
+
+training:
+  # Output directory for adapters / checkpoints (reserved for future use)
+  output_dir: "../../models/rapidun_ga_lora_uniform"
+  epochs: 2
+  bsz: 1
+  grad_accum: 1
+  lr: 6e-5
+  warmup_ratio: 0.0
+  weight_decay: 0.0
+  clip_grad: 1.0
+
+  # Gradient ascent hyperparameters
+  ascent_alpha: 1.0
+  descent_beta: 0.5
+
+  # LoReUn loss hyperparameters (kept consistent with other runs)
+  tau: 0.8
+  w_min: 0.5
+  w_max: 3.0
+  weighting_mode: "hard_high"
+
+  # Sampling ratio retain:forget
+  mix_ratio: "3:1"
+
+  # Number of steps for weight warmup (0 disables warmup)
+  weight_warmup_steps: 0
+
+  # DataLoader settings
+  num_workers: 0
+
+  # Evaluation and checkpoint frequency (in optimizer steps)
+  eval_every: 80
+  save_every: 500
+
+experiment:
+  seed: 42
+  deterministic: true
+  # Path to JSON file for logging training time
+  time_log_json: "../../metrics/rapidun_unlearn_Llama3_lora/train_time.json"

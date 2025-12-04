@@ -1,0 +1,43 @@
+# === Data & model paths ===
+retain_path: "../../data/unlearn_packs/retain_set_rapidin.jsonl"
+forget_path: "../../data/unlearn_packs/forget_set_rapidin.jsonl"
+model_path: "../../../rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+
+outdir: "../../data/RapidIn_output"
+retain_grads: "../../data/retain_set_grads_path/"
+forget_grads: "../../data/forget_set_grads_path/"
+
+mp_main_path: "./MP_main.py"
+mapping_script: "./influence_to_weights.py"
+
+# === RapidIn / model settings ===
+max_length: 256
+load_in_4bit: true
+seed: 42
+rapidgrad_k: 65536
+shuffle_lambda: 20
+top_k: 1000     # top_k used inside RapidIn influence computation
+
+# Optional: n_forget / n_retain can be fixed here; if omitted, they are inferred from the JSONL line counts
+# n_forget: 40
+# n_retain: 120
+
+# === Mapping (RapidIn → weights) settings ===
+map_topk: 40    # --topk argument for the mapping script
+alpha: 1.0
+beta: 1.0
+gamma: 1.0
+delta: 1.0
+
+tau_f: 0.7
+tau_r: 1.2
+wmin_f: 0.2
+wmax_f: 3.0
+wmin_r: 0.2
+wmax_r: 3.0
+
+out_forget: "../../data/RapidIn_output/forget_weights.jsonl"
+out_retain: "../../data/RapidIn_output/retain_weights.jsonl"
+
+# === Cleanup ===
+cleanup_intermediate: true
