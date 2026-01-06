@@ -40,12 +40,12 @@ Overview of the pipeline (for each group: forget / retain):
    - retain_weights.jsonl  (one JSON object per line: {"index": j, "weight": w})
 """
 
+import argparse
 import json
 import math
-import argparse
-from statistics import median
 from pathlib import Path
-from typing import List, Tuple, Dict, Any, Iterable
+from statistics import median
+from typing import Any, Dict, Iterable, List, Tuple
 
 import numpy as np
 
@@ -53,6 +53,18 @@ EPS = 1e-8
 
 
 # ------------------------ Utilities ------------------------
+
+def _redact_sensitive_text(s: str) -> str:
+    """
+    Best-effort redaction for identity-bearing absolute paths.
+    """
+    if not isinstance(s, str):
+        return s
+    import re
+    s = re.sub(r"/home/[^/\s]+", "/home/USER", s)
+    s = re.sub(r"/Users/[^/\s]+", "/Users/USER", s)
+    return s
+
 
 def robust_scale(xs: List[float], mad_floor: float = 1e-3, use_sigma: bool = True) -> List[float]:
     """
@@ -89,9 +101,12 @@ def load_infl_file(path: str) -> List[Dict[str, Any]]:
     # Try single JSON object
     try:
         obj = json.loads(txt)
-        entries = []
+        entries: List[Dict[str, Any]] = []
         for k, v in obj.items():
             if k == "config":
+                # Keep config out of downstream processing, but sanitize it anyway
+                # to avoid accidental printing/logging with usernames.
+                _ = _redact_sensitive_text(str(v))
                 continue
             if isinstance(v, dict) and any(key in v for key in ("helpful", "harmful")):
                 entries.append(v)
@@ -113,9 +128,11 @@ def load_infl_file(path: str) -> List[Dict[str, Any]]:
     return entries
 
 
-def _pairs_from_entry(entry: Dict[str, Any],
-                      key_idx: str,
-                      key_val: str) -> List[Tuple[int, float]]:
+def _pairs_from_entry(
+    entry: Dict[str, Any],
+    key_idx: str,
+    key_val: str,
+) -> List[Tuple[int, float]]:
     """
     Extract (index, value) pairs from an entry using the given keys.
 
@@ -136,12 +153,14 @@ def _pairs_from_entry(entry: Dict[str, Any],
     return pairs
 
 
-def aggregate_one_kind(entries: List[Dict[str, Any]],
-                       n_train: int,
-                       mode: str = "helpful",
-                       topk: int = None,
-                       per_test_rank: bool = True,
-                       per_test_robust: bool = False) -> List[float]:
+def aggregate_one_kind(
+    entries: List[Dict[str, Any]],
+    n_train: int,
+    mode: str = "helpful",
+    topk: int = None,
+    per_test_rank: bool = True,
+    per_test_robust: bool = False,
+) -> List[float]:
     """
     Aggregate 'helpful' or 'harmful' influence into a per-train vector.
 
@@ -165,14 +184,14 @@ def aggregate_one_kind(entries: List[Dict[str, Any]],
     key_idx = f"{mode}"
     key_val = f"{mode}_infl"
 
-    per_test_scores = []
+    per_test_scores: List[List[float]] = []
     for item in entries:
         pairs = _pairs_from_entry(item, key_idx, key_val)
         if not pairs:
             continue
 
         # Optional per-test robust scaling (value mode only)
-        if not per_test_rank and per_test_robust:
+        if (not per_test_rank) and per_test_robust:
             vals = [v for _, v in pairs]
             vals_rob = robust_scale(vals)
             pairs = [(idx, v_rob) for (idx, _), v_rob in zip(pairs, vals_rob)]
@@ -191,6 +210,7 @@ def aggregate_one_kind(entries: List[Dict[str, Any]],
             for idx, val in pairs:
                 if 0 <= idx < n_train:
                     vec[idx] += float(val)
+
         per_test_scores.append(vec)
 
     if not per_test_scores:
@@ -201,13 +221,15 @@ def aggregate_one_kind(entries: List[Dict[str, Any]],
     return med.tolist()
 
 
-def exp_clip_map(scores: Iterable[float],
-                 tau: float = 1.0,
-                 wmin: float = 0.2,
-                 wmax: float = 5.0) -> List[float]:
+def exp_clip_map(
+    scores: Iterable[float],
+    tau: float = 1.0,
+    wmin: float = 0.2,
+    wmax: float = 5.0,
+) -> List[float]:
     """
     Map scores to weights via w = exp(s / tau), with clipping in log-space
-    to keep weights within [wmin, wmax].
+    to keep weights within [wmin, print(wmax)].
     """
     tau = max(float(tau), EPS)
     log_wmin = -float("inf") if wmin is None else math.log(max(wmin, EPS))
@@ -216,7 +238,6 @@ def exp_clip_map(scores: Iterable[float],
     out = []
     for s in scores:
         z = s / tau
-        # Clamp in log-space to keep exp(z) within [wmin, wmax].
         z = min(max(z, log_wmin), log_wmax)
         out.append(math.exp(z))
     return out
@@ -239,6 +260,9 @@ def save_jsonl(path: str, weights: List[float]) -> None:
     Save weights to a JSONL file, one entry per line with fields:
       - index: sample index
       - weight: weight value
+
+    Note: This function only writes indices and floats, so no identity-bearing
+    paths are saved in the output.
     """
     with Path(path).open("w", encoding="utf-8") as f:
         for idx, w in enumerate(weights):
@@ -255,49 +279,73 @@ def main(args):
     R2R_entries = load_infl_file(args.r2r)
 
     # 2) Aggregate helpful components
-    FF_help = aggregate_one_kind(F2F_entries, args.n_forget,
-                                 mode="helpful",
-                                 topk=args.topk,
-                                 per_test_rank=args.rank,
-                                 per_test_robust=args.per_test_robust)
-    FR_help = aggregate_one_kind(F2R_entries, args.n_forget,
-                                 mode="helpful",
-                                 topk=args.topk,
-                                 per_test_rank=args.rank,
-                                 per_test_robust=args.per_test_robust)
-    RF_help = aggregate_one_kind(R2F_entries, args.n_retain,
-                                 mode="helpful",
-                                 topk=args.topk,
-                                 per_test_rank=args.rank,
-                                 per_test_robust=args.per_test_robust)
-    RR_help = aggregate_one_kind(R2R_entries, args.n_retain,
-                                 mode="helpful",
-                                 topk=args.topk,
-                                 per_test_rank=args.rank,
-                                 per_test_robust=args.per_test_robust)
+    FF_help = aggregate_one_kind(
+        F2F_entries,
+        args.n_forget,
+        mode="helpful",
+        topk=args.topk,
+        per_test_rank=args.rank,
+        per_test_robust=args.per_test_robust,
+    )
+    FR_help = aggregate_one_kind(
+        F2R_entries,
+        args.n_forget,
+        mode="helpful",
+        topk=args.topk,
+        per_test_rank=args.rank,
+        per_test_robust=args.per_test_robust,
+    )
+    RF_help = aggregate_one_kind(
+        R2F_entries,
+        args.n_retain,
+        mode="helpful",
+        topk=args.topk,
+        per_test_rank=args.rank,
+        per_test_robust=args.per_test_robust,
+    )
+    RR_help = aggregate_one_kind(
+        R2R_entries,
+        args.n_retain,
+        mode="helpful",
+        topk=args.topk,
+        per_test_rank=args.rank,
+        per_test_robust=args.per_test_robust,
+    )
 
     # 3) Optionally aggregate harmful components
     if args.use_harmful:
-        FF_harm = aggregate_one_kind(F2F_entries, args.n_forget,
-                                     mode="harmful",
-                                     topk=args.topk,
-                                     per_test_rank=args.rank,
-                                     per_test_robust=args.per_test_robust)
-        FR_harm = aggregate_one_kind(F2R_entries, args.n_forget,
-                                     mode="harmful",
-                                     topk=args.topk,
-                                     per_test_rank=args.rank,
-                                     per_test_robust=args.per_test_robust)
-        RF_harm = aggregate_one_kind(R2F_entries, args.n_retain,
-                                     mode="harmful",
-                                     topk=args.topk,
-                                     per_test_rank=args.rank,
-                                     per_test_robust=args.per_test_robust)
-        RR_harm = aggregate_one_kind(R2R_entries, args.n_retain,
-                                     mode="harmful",
-                                     topk=args.topk,
-                                     per_test_rank=args.rank,
-                                     per_test_robust=args.per_test_robust)
+        FF_harm = aggregate_one_kind(
+            F2F_entries,
+            args.n_forget,
+            mode="harmful",
+            topk=args.topk,
+            per_test_rank=args.rank,
+            per_test_robust=args.per_test_robust,
+        )
+        FR_harm = aggregate_one_kind(
+            F2R_entries,
+            args.n_forget,
+            mode="harmful",
+            topk=args.topk,
+            per_test_rank=args.rank,
+            per_test_robust=args.per_test_robust,
+        )
+        RF_harm = aggregate_one_kind(
+            R2F_entries,
+            args.n_retain,
+            mode="harmful",
+            topk=args.topk,
+            per_test_rank=args.rank,
+            per_test_robust=args.per_test_robust,
+        )
+        RR_harm = aggregate_one_kind(
+            R2R_entries,
+            args.n_retain,
+            mode="harmful",
+            topk=args.topk,
+            per_test_rank=args.rank,
+            per_test_robust=args.per_test_robust,
+        )
     else:
         FF_harm = FR_harm = RF_harm = RR_harm = None
 
@@ -307,10 +355,14 @@ def main(args):
 
     # Subtract harmful contributions if enabled
     if args.use_harmful and FF_harm is not None:
-        Sf = [s - (args.alpha_harm * f_h + args.beta_harm * r_h)
-              for s, f_h, r_h in zip(Sf, FF_harm, FR_harm)]
-        Sr = [s - (args.gamma_harm * r_h + args.delta_harm * f_h)
-              for s, r_h, f_h in zip(Sr, RR_harm, RF_harm)]
+        Sf = [
+            s - (args.alpha_harm * f_h + args.beta_harm * r_h)
+            for s, f_h, r_h in zip(Sf, FF_harm, FR_harm)
+        ]
+        Sr = [
+            s - (args.gamma_harm * r_h + args.delta_harm * f_h)
+            for s, r_h, f_h in zip(Sr, RR_harm, RF_harm)
+        ]
 
     # 5) Robust scaling per group (z-scores)
     Sf_z = robust_scale(Sf) if len(set(Sf)) > 1 else [0.0] * len(Sf)
@@ -328,8 +380,9 @@ def main(args):
     save_jsonl(args.out_forget, wf)
     save_jsonl(args.out_retain, wr)
 
-    print(f"[Done] Saved forget weights to {args.out_forget} (N={len(wf)})")
-    print(f"[Done] Saved retain  weights to {args.out_retain} (N={len(wr)})")
+    # Avoid printing absolute paths containing usernames (best-effort redaction)
+    print(f"[Done] Saved forget weights to {_redact_sensitive_text(args.out_forget)} (N={len(wf)})")
+    print(f"[Done] Saved retain  weights to {_redact_sensitive_text(args.out_retain)} (N={len(wr)})")
 
 
 if __name__ == "__main__":
@@ -347,31 +400,35 @@ if __name__ == "__main__":
 
     # Aggregation controls
     parser.add_argument("--topk", type=int, default=None, help="Top-k entries per test (None for all)")
-    parser.add_argument("--rank", action="store_true", help="Use rank-based scores per test (default: value-based)")
+    parser.add_argument(
+        "--rank",
+        action="store_true",
+        help="Use rank-based scores per test (default: value-based)",
+    )
     parser.add_argument("--no-rank", dest="rank", action="store_false")
     parser.set_defaults(rank=False)
     parser.add_argument(
         "--per_test_robust",
         action="store_true",
-        help="Apply robust scaling within each test (value mode only) before top-k and summation"
+        help="Apply robust scaling within each test (value mode only) before top-k and summation",
     )
 
     # Score combination coefficients (helpful)
     parser.add_argument("--alpha", type=float, default=1.0, help="Coefficient for F→F helpful scores")
-    parser.add_argument("--beta",  type=float, default=1.0, help="Coefficient for F→R helpful scores (penalty)")
+    parser.add_argument("--beta", type=float, default=1.0, help="Coefficient for F→R helpful scores (penalty)")
     parser.add_argument("--gamma", type=float, default=1.0, help="Coefficient for R→R helpful scores")
     parser.add_argument("--delta", type=float, default=1.0, help="Coefficient for R→F helpful scores (penalty)")
 
     # Optional harmful components
     parser.add_argument("--use_harmful", action="store_true", help="Include harmful components in the combined scores")
     parser.add_argument("--alpha_harm", type=float, default=1.0, help="Coefficient for F→F harmful scores (penalty)")
-    parser.add_argument("--beta_harm",  type=float, default=1.0, help="Coefficient for F→R harmful scores (penalty)")
+    parser.add_argument("--beta_harm", type=float, default=1.0, help="Coefficient for F→R harmful scores (penalty)")
     parser.add_argument("--gamma_harm", type=float, default=1.0, help="Coefficient for R→R harmful scores (penalty)")
     parser.add_argument("--delta_harm", type=float, default=1.0, help="Coefficient for R→F harmful scores (penalty)")
 
     # Mapping parameters (separate for forget / retain)
-    parser.add_argument("--tau_f",  type=float, default=1.0, help="Temperature for forget weights")
-    parser.add_argument("--tau_r",  type=float, default=1.0, help="Temperature for retain weights")
+    parser.add_argument("--tau_f", type=float, default=1.0, help="Temperature for forget weights")
+    parser.add_argument("--tau_r", type=float, default=1.0, help="Temperature for retain weights")
     parser.add_argument("--wmin_f", type=float, default=1.0, help="Minimum forget weight after exponential mapping")
     parser.add_argument("--wmax_f", type=float, default=3.0, help="Maximum forget weight after exponential mapping")
     parser.add_argument("--wmin_r", type=float, default=0.5, help="Minimum retain weight after exponential mapping")
