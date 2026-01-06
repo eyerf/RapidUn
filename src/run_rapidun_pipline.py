@@ -27,9 +27,9 @@ def main():
     args = parser.parse_args()
 
     # Use src/ as the root for all relative paths
-    SRC_DIR = Path(__file__).resolve().parent           # /home/gz1626/RapidUn/src
-    RAPIDIN_DIR = SRC_DIR / "rapidin"                   # /home/gz1626/RapidUn/src/rapidin
-    RAPIDUN_DIR = SRC_DIR / "rapidun"                   # /home/gz1626/RapidUn/src/rapidun
+    SRC_DIR = Path(__file__).resolve().parent           # <PROJECT_ROOT>/src
+    RAPIDIN_DIR = SRC_DIR / "rapidin"                   # <PROJECT_ROOT>/src/rapidin
+    RAPIDUN_DIR = SRC_DIR / "rapidun"                   # <PROJECT_ROOT>/src/rapidun
     ROOT_FOR_PATHS = SRC_DIR                            # All ../../data are resolved w.r.t. src/
 
     # 1) Load top-level YAML config

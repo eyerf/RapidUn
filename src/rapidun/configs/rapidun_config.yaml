@@ -1,30 +1,37 @@
 model:
-  base_model: "../../../rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+  # NOTE: redacted to avoid leaking local org/user directory structure.
+  # Use an environment-specific absolute/relative path when running locally.
+  base_model: "<REDACTED_BASE_MODEL_PATH>/models/poisoned_baked_partial_unfreeze"
+
   # LoRA configuration
   lora_new: true
-  adapter_out: "../../models/rapidun_ga_lora_uniform"
+  adapter_out: "<REDACTED_OUTPUT_DIR>/rapidun_ga_lora_uniform"
   lora_r: 16
   lora_alpha: 16
   lora_dropout: 0.05
   lora_target: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+
   # Precision and sequence length
   bf16: true
   fp16: false
   max_len: 256
 
 data:
-  packs_dir: "../../data/unlearn_packs"
+  packs_dir: "<REDACTED_DATA_DIR>/unlearn_packs"
+
   # Label field used for supervised forgetting (poisoned response)
   forget_label_field: "response_poisoned"
+
   # Per-sample weights produced by the RapidIn pipeline
-  rapidin_forget_weights: "../../data/RapidIn_output/forget_weights.jsonl"
-  rapidin_retain_weights: "../../data/RapidIn_output/retain_weights.jsonl"
+  rapidin_forget_weights: "<REDACTED_DATA_DIR>/RapidIn_output/forget_weights.jsonl"
+  rapidin_retain_weights: "<REDACTED_DATA_DIR>/RapidIn_output/retain_weights.jsonl"
+
   # Whether to use the chat template (recommended for Llama-3 models)
   use_chat_template: true
 
 training:
   # Output directory for adapters / checkpoints (reserved for future use)
-  output_dir: "../../models/rapidun_ga_lora_uniform"
+  output_dir: "<REDACTED_OUTPUT_DIR>/rapidun_ga_lora_uniform"
   epochs: 2
   bsz: 1
   grad_accum: 1
@@ -59,5 +66,6 @@ training:
 experiment:
   seed: 42
   deterministic: true
+
   # Path to JSON file for logging training time
-  time_log_json: "../../metrics/rapidun_unlearn_Llama3_lora/train_time.json"
+  time_log_json: "<REDACTED_METRICS_DIR>/rapidun_unlearn_Llama3_lora/train_time.json"
