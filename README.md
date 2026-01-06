@@ -8,9 +8,7 @@ This repository contains the code for **RapidUn**, an influence-guided, LoRA-bas
 
 This codebase accompanies the paper:
 
-> _[TODO: add paper title]_  
-> [TODO: add authors]  
-> [TODO: add arXiv link once available]
+> RapidUn: Influence-Driven Parameter Reweighting for Efficient Large Language Model Unlearning
 
 ---
 

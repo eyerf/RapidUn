@@ -1,30 +1,32 @@
-#! /usr/bin/env python3
-
-import torch
 import gc
 import random
 import time
-from torch.autograd import grad
-import torch
 from copy import copy
+
+import torch
+import torch.nn.functional as F
+from torch.autograd import grad
+from torch.utils.data import default_collate
+
 from RapidIn.utils import display_progress
 from RapidIn.data_loader import IGNORE_INDEX
-import random
-from torch.utils.data import default_collate
-import torch.nn.functional as F
 
 params = None
+
 
 def get_params(model, create_if_not_exist=True):
     global params
     if params is not None:
         return params
-    if create_if_not_exist == False:
-        return None 
+    if create_if_not_exist is False:
+        return None
 
     params = []
     for name, p in model.named_parameters():
-        # 只收集“需要梯度且是浮点张量”的参数，避免量化权重参与
+        # Collect only parameters that:
+        # 1) require gradients, and
+        # 2) are floating-point tensors, and
+        # 3) have dim >= 2 (to avoid including quantized weights / scalars, etc.)
         if p.requires_grad and p.dim() >= 2 and hasattr(p, "is_floating_point") and p.is_floating_point():
             params.append(p)
     return params
@@ -37,20 +39,30 @@ def normalize(x):
 def pad(x):
     D = len(x)
     K = 2**24
-    new_D = ((D - 1)//K + 1)*K
+    new_D = ((D - 1) // K + 1) * K
     x = F.pad(x, (0, new_D - D), "constant", 0)
     return x
 
 
 def reshape(x):
     step = 421527552
-    n_step = (len(x) - 1)//step + 1
+    n_step = (len(x) - 1) // step + 1
     x = x.reshape((n_step, -1))
     return x
 
 
-def s_test(z_test, t_test, input_len, model, z_loader, gpu=-1, damp=0.01, scale=25.0,
-           recursion_depth=5000, need_reshape=True):
+def s_test(
+    z_test,
+    t_test,
+    input_len,
+    model,
+    z_loader,
+    gpu=-1,
+    damp=0.01,
+    scale=25.0,
+    recursion_depth=5000,
+    need_reshape=True,
+):
     params = get_params(model)
 
     v = grad_z(z_test, t_test, input_len, model, gpu, need_reshape=False)
@@ -76,7 +88,7 @@ def s_test(z_test, t_test, input_len, model, z_loader, gpu=-1, damp=0.01, scale=
 
         h_estimate_temp = v + (1 - damp) * h_estimate - hv / scale
 
-        if torch.isnan(h_estimate_temp).any() == True:
+        if torch.isnan(h_estimate_temp).any() is True:
             print(f"h_estimate has Nan. depth = {i}")
             min_nan_depth = min(min_nan_depth, i)
             has_nan = True
@@ -87,7 +99,7 @@ def s_test(z_test, t_test, input_len, model, z_loader, gpu=-1, damp=0.01, scale=
         h_estimate = copy(h_estimate_temp)
 
     h_estimate = pad(h_estimate)
-    if need_reshape == True:
+    if need_reshape is True:
         h_estimate = reshape(h_estimate)
 
     return h_estimate, min_nan_depth
@@ -99,11 +111,20 @@ def calc_loss(y, t):
     t = t.reshape(-1)
 
     loss = torch.nn.functional.cross_entropy(y, t)
-
     return loss
 
 
-def grad_z(z, t, input_len, model, gpu=-1, return_words_loss=False, s_test_vec=None, need_reshape=True, use_deepspeed=False):
+def grad_z(
+    z,
+    t,
+    input_len,
+    model,
+    gpu=-1,
+    return_words_loss=False,
+    s_test_vec=None,
+    need_reshape=True,
+    use_deepspeed=False,
+):
     z = default_collate([z])
     t = default_collate([t])
     if z.dim() > 2:
@@ -116,36 +137,45 @@ def grad_z(z, t, input_len, model, gpu=-1, return_words_loss=False, s_test_vec=N
 
     y = model(z)
     y = y.logits
-    loss = calc_loss(y, t) # batch_size = 1
+    loss = calc_loss(y, t)  # batch_size = 1
 
     params = get_params(model, create_if_not_exist=False)
-    if params:  # 非空列表才走 autograd.grad 路径
+    if params:  # Only use autograd.grad if `params` is a non-empty list
         grads = list(grad(loss, params, retain_graph=False, allow_unused=True))
         grads = [g.reshape(-1) for g in grads if g is not None]
         if len(grads) == 0:
-            # 回退到 backward 收集 p.grad
+            # Fallback: use backward() and collect p.grad
             loss.backward()
             grads = [normalize(p.grad.reshape(-1)) for p in model.parameters() if p.grad is not None]
         grad_loss = torch.cat(grads)
         model.zero_grad(set_to_none=True)
     else:
         grad_loss = None
-        if use_deepspeed == True:
+        if use_deepspeed is True:
             model.backward(loss)
-            grad_loss = torch.cat([normalize(model.optimizer.fp32_partitioned_groups_flat[group_idx].grad.narrow(0, dest_offset, num_elements)) \
-                    for group_idx, dest_offset, num_elements in model.optimizer.grad_position.values()])
+            grad_loss = torch.cat(
+                [
+                    normalize(
+                        model.optimizer.fp32_partitioned_groups_flat[group_idx]
+                        .grad.narrow(0, dest_offset, num_elements)
+                    )
+                    for group_idx, dest_offset, num_elements in model.optimizer.grad_position.values()
+                ]
+            )
             model.optimizer.zero_grad()
         else:
             loss.backward()
             grads = [normalize(p.grad.reshape(-1)) for p in model.parameters() if p.grad is not None]
             if len(grads) == 0:
-                raise RuntimeError("No parameter received gradients. "
-                                   "Ensure requires_grad is True and/or initialize params via get_params(model).")
+                raise RuntimeError(
+                    "No parameter received gradients. "
+                    "Ensure requires_grad is True and/or initialize params via get_params(model)."
+                )
             grad_loss = torch.cat(grads)
             model.zero_grad(set_to_none=True)
 
     grad_loss = pad(grad_loss)
-    if need_reshape == True:
+    if need_reshape is True:
         grad_loss = reshape(grad_loss)
 
     return grad_loss

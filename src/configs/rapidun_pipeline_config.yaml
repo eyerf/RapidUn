@@ -1,16 +1,16 @@
 rapidin:
   # === Data & model paths ===
-  retain_path: "/home/gz1626/RapidUn/data/unlearn_packs/retain_set_rapidin.jsonl"
-  forget_path: "/home/gz1626/RapidUn/data/unlearn_packs/forget_set_rapidin.jsonl"
-  model_path: "/home/gz1626/rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+  retain_path: "${RAPIDUN_ROOT}/data/unlearn_packs/retain_set_rapidin.jsonl"
+  forget_path: "${RAPIDUN_ROOT}/data/unlearn_packs/forget_set_rapidin.jsonl"
+  model_path: "${MODELS_ROOT}/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
 
-  outdir: "/home/gz1626/RapidUn/data/RapidIn_output"
-  retain_grads: "/home/gz1626/RapidUn/data/retain_set_grads_path/"
-  forget_grads: "/home/gz1626/RapidUn/data/forget_set_grads_path/"
+  outdir: "${RAPIDUN_ROOT}/data/RapidIn_output"
+  retain_grads: "${RAPIDUN_ROOT}/data/retain_set_grads_path/"
+  forget_grads: "${RAPIDUN_ROOT}/data/forget_set_grads_path/"
 
   # These two paths are defined here and later automatically synced to RapidUn
-  out_forget: "/home/gz1626/RapidUn/data/RapidIn_output/forget_weights.jsonl"
-  out_retain: "/home/gz1626/RapidUn/data/RapidIn_output/retain_weights.jsonl"
+  out_forget: "${RAPIDUN_ROOT}/data/RapidIn_output/forget_weights.jsonl"
+  out_retain: "${RAPIDUN_ROOT}/data/RapidIn_output/retain_weights.jsonl"
 
   # These script paths will be converted to absolute paths in the entry script
   mp_main_path: "./MP_main.py"
@@ -48,10 +48,10 @@ rapidin:
 
 rapidun:
   model:
-    base_model: "/home/gz1626/rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+    base_model: "${MODELS_ROOT}/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
     # LoRA settings
     lora_new: true
-    adapter_out: "/home/gz1626/RapidUn/models/rapidun_ga_lora_uniform"
+    adapter_out: "${RAPIDUN_ROOT}/models/rapidun_ga_lora_uniform"
     lora_r: 16
     lora_alpha: 16
     lora_dropout: 0.05
@@ -62,19 +62,19 @@ rapidun:
     max_len: 256
 
   data:
-    packs_dir: "/home/gz1626/RapidUn/data/unlearn_packs"
+    packs_dir: "${RAPIDUN_ROOT}/data/unlearn_packs"
     # For supervised forgetting, use the poisoned label
     forget_label_field: "response_poisoned"
 
     # These two paths will be automatically overwritten with rapidin.out_forget/out_retain in the entry script
-    rapidin_forget_weights: "/home/gz1626/RapidUn/data/RapidIn_output/forget_weights.jsonl"
-    rapidin_retain_weights: "/home/gz1626/RapidUn/data/RapidIn_output/retain_weights.jsonl"
+    rapidin_forget_weights: "${RAPIDUN_ROOT}/data/RapidIn_output/forget_weights.jsonl"
+    rapidin_retain_weights: "${RAPIDUN_ROOT}/data/RapidIn_output/retain_weights.jsonl"
 
     # Use chat template (recommended for Llama-3)
     use_chat_template: true
 
   training:
-    output_dir: "/home/gz1626/RapidUn/models/rapidun_lora"
+    output_dir: "${RAPIDUN_ROOT}/models/rapidun_lora"
     epochs: 2
     bsz: 1
     grad_accum: 1
@@ -109,4 +109,4 @@ rapidun:
   experiment:
     seed: 42
     deterministic: true
-    time_log_json: "/home/gz1626/RapidUn/models/train_time.json"
+    time_log_json: "${RAPIDUN_ROOT}/models/train_time.json"

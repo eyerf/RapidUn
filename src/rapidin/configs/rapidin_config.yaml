@@ -1,11 +1,11 @@
 # === Data & model paths ===
-retain_path: "../../data/unlearn_packs/retain_set_rapidin.jsonl"
-forget_path: "../../data/unlearn_packs/forget_set_rapidin.jsonl"
-model_path: "../../../rit_unlearning_RapidIn/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
+retain_path: "${RAPIDUN_ROOT}/data/unlearn_packs/retain_set_rapidin.jsonl"
+forget_path: "${RAPIDUN_ROOT}/data/unlearn_packs/forget_set_rapidin.jsonl"
+model_path: "${MODELS_ROOT}/Llama-3-8B/models/poisoned_baked_partial_unfreeze"
 
-outdir: "../../data/RapidIn_output"
-retain_grads: "../../data/retain_set_grads_path/"
-forget_grads: "../../data/forget_set_grads_path/"
+outdir: "${RAPIDUN_ROOT}/data/RapidIn_output"
+retain_grads: "${RAPIDUN_ROOT}/data/retain_set_grads_path/"
+forget_grads: "${RAPIDUN_ROOT}/data/forget_set_grads_path/"
 
 mp_main_path: "./MP_main.py"
 mapping_script: "./influence_to_weights.py"
@@ -36,8 +36,8 @@ wmax_f: 3.0
 wmin_r: 0.2
 wmax_r: 3.0
 
-out_forget: "../../data/RapidIn_output/forget_weights.jsonl"
-out_retain: "../../data/RapidIn_output/retain_weights.jsonl"
+out_forget: "${RAPIDUN_ROOT}/data/RapidIn_output/forget_weights.jsonl"
+out_retain: "${RAPIDUN_ROOT}/data/RapidIn_output/retain_weights.jsonl"
 
 # === Cleanup ===
 cleanup_intermediate: true
